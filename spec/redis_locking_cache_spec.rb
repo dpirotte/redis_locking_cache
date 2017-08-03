@@ -73,7 +73,7 @@ describe RedisLockingCache do
 
     describe "with live cache key" do
       it "serves the cached value" do
-        redis.fetch("cache key", :expires_in => 1) { "cached" }
+        redis.fetch("cache key", :expires_in => 10) { "cached" }
 
         results = parallel(10) do
           redis.fetch("cache key") do

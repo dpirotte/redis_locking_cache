@@ -1,5 +1,6 @@
 require "forwardable"
 require "redis"
+require "securerandom"
 
 class RedisLockingCache
   extend Forwardable
@@ -11,7 +12,8 @@ class RedisLockingCache
   def_delegators :@redis, :flushall
 
   def fetch(key, opts = {}, &block)
-    new_expiry = opts.fetch(:expires_in, 1)
+    expires_in = opts.fetch(:expires_in, 1)
+    expires_in_ms = (expires_in * 1000).to_i
     lock_timeout = opts.fetch(:lock_timeout, 1)
     lock_wait = opts.fetch(:lock_wait, 0.025)
     cache_wait = opts.fetch(:cache_wait, 1)
@@ -21,7 +23,7 @@ class RedisLockingCache
 
     cached, expiry = @redis.mget(key, expiry_key)
 
-    if cached.nil? || expiry.nil? # missing
+    if cached.nil?
       cache_wait_expiry = Time.now.to_f + cache_wait
 
       while cached.nil? && Time.now.to_f < cache_wait_expiry
@@ -29,7 +31,8 @@ class RedisLockingCache
           if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
             begin
               cached = block.call
-              @redis.mset(key, cached, expiry_key, Time.now.to_f + new_expiry)
+              @redis.set(key, cached)
+              @redis.set(expiry_key, 1, px: expires_in_ms)
             ensure
               @redis.del(lock_key) # Race condition here
             end
@@ -37,12 +40,14 @@ class RedisLockingCache
           sleep lock_wait
         end
       end
-    elsif expiry.to_f < Time.now.to_f
+    elsif expiry.nil?
       # TODO remove lock key
       if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
+        lock_id = SecureRandom.random_bytes(16)
         begin
           cached = block.call
-          @redis.mset(key, cached, expiry_key, Time.now.to_f + new_expiry)
+          @redis.set(key, cached)
+          @redis.set(expiry_key, 1, px: expires_in_ms)
         rescue
           # TODO bubble up errors when appropriate
         ensure
