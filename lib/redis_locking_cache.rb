@@ -28,22 +28,26 @@ class RedisLockingCache
 
       while cached.nil? && Time.now.to_f < cache_wait_expiry
         unless cached = @redis.get(key)
-          if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
+          lock_id = SecureRandom.hex(16)
+          if @redis.set(lock_key, lock_id, nx: true, ex: lock_timeout)
             begin
               cached = block.call
               @redis.set(key, cached)
               @redis.set(expiry_key, 1, px: expires_in_ms)
             ensure
-              @redis.del(lock_key) # Race condition here
+              if @redis.get(lock_key) == lock_id
+                @redis.del(lock_key)
+              end
             end
+          else
+            sleep(lock_wait)
           end
-          sleep lock_wait
         end
       end
     elsif expiry.nil?
       # TODO remove lock key
+      lock_id = SecureRandom.hex(16)
       if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
-        lock_id = SecureRandom.random_bytes(16)
         begin
           cached = block.call
           @redis.set(key, cached)
@@ -51,7 +55,9 @@ class RedisLockingCache
         rescue
           # TODO bubble up errors when appropriate
         ensure
-          @redis.del(lock_key) # Race condition here
+          if @redis.get(lock_key) == lock_id
+            @redis.del(lock_key)
+          end
         end
       end
     end
