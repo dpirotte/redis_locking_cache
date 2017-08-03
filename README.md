@@ -1,28 +1,18 @@
 # RedisLockingCache
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/redis_locking_cache`. To experiment with that code, run `bin/console` for an interactive prompt.
+Warning: This gem is alpha quality and not intended for production use. Code of this nature is fraught with race conditions and edge cases, and this gem was quickly constructed as an example.
 
-TODO: Delete this and the text above, and describe your gem
+WIP Redis caching gem that attempts to mitigate [cache stampede](https://en.wikipedia.org/wiki/Cache_stampede) by only permitting a single concurrent cache request to refresh the cache at a time. While the cache is refreshing, the stale value will be served. If cache refresh raises an error, the stale value will be served.
+
+This gem is inspired by some helpful behavior in Nginx's HTTP proxy module: [proxy_cache_lock](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_lock) and [proxy_cache_use_stale](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_cache_use_stale).
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
-```ruby
-gem 'redis_locking_cache'
-```
-
-And then execute:
-
-    $ bundle
-
-Or install it yourself as:
-
-    $ gem install redis_locking_cache
+Coming soon...
 
 ## Usage
 
-TODO: Write usage instructions here
+Coming soon...
 
 ## Development
 
