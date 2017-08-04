@@ -39,6 +39,10 @@ describe RedisLockingCache do
         uncached_call_count.must_equal 1
         results.must_equal ["cached"] * 10
       end
+
+      it "does not swallow errors" do
+        ->{ redis.fetch("cache key") { raise RuntimeError } }.must_raise RuntimeError
+      end
     end
 
     describe "with expired cache key" do
@@ -56,7 +60,7 @@ describe RedisLockingCache do
         results.sort.must_equal ["cached"] * 4 + ["new cached"]
       end
 
-      it "serves the cached value on error" do
+      it "swallows errors and serves the cached value" do
         redis.fetch("cache key", :expires_in => 0.1) { "cached" }
         sleep 0.2
 
