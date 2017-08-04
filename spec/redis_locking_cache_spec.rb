@@ -24,6 +24,13 @@ describe RedisLockingCache do
       end
     end
 
+    describe 'lock_key_for' do
+      it 'formats a lock key for the specified key' do
+        redis.lock_key_for('foo').must_equal 'foo:lock'
+      end
+    end
+
+
     describe 'get_with_external_expiry' do
       it 'returns a value and an expiry' do
         redis.set_with_external_expiry('foo', 'bar', 1000)

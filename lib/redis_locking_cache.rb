@@ -69,18 +69,21 @@ class RedisLockingCache
 
   def attempt_lock_for(key, opts = {})
     lock_id = SecureRandom.hex(16)
-    lock_key = "#{key}#{LockSuffix}"
     lock_timeout = opts.fetch(:lock_timeout, 1000)
 
-    if @redis.set(lock_key, lock_id, nx: true, px: lock_timeout)
+    if @redis.set(lock_key_for(key), lock_id, nx: true, px: lock_timeout)
       begin
         yield true
       ensure
-        compare_and_delete(lock_key, lock_id)
+        compare_and_delete(lock_key_for(key), lock_id)
       end
     else
       yield false
     end
+  end
+
+  def lock_key_for(key)
+    "#{key}#{LockSuffix}"
   end
 
   def expiry_key_for(key)
