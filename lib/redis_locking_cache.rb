@@ -10,13 +10,9 @@ class RedisLockingCache
     @redis = redis
   end
 
-  def fetch(key, opts = {})
-    expires_in = opts.fetch(:expires_in, 1)
+  def fetch(key, expires_in: 1, lock_timeout: 1, lock_wait: 0.025, cache_wait: 1)
     expires_in_ms = (expires_in * 1000).to_i
-    lock_timeout = opts.fetch(:lock_timeout, 1)
     lock_timeout_ms = (lock_timeout * 1000).to_i
-    lock_wait = opts.fetch(:lock_wait, 0.025)
-    cache_wait = opts.fetch(:cache_wait, 1)
 
     cached, expiry = get_with_external_expiry(key)
 
@@ -63,10 +59,7 @@ class RedisLockingCache
     cached
   end
 
-  def attempt_lock_for(key, opts = {})
-    lock_id = SecureRandom.hex(16)
-    lock_timeout = opts.fetch(:lock_timeout, 1000)
-
+  def attempt_lock_for(key, lock_timeout: 1000, lock_id: SecureRandom.hex(16))
     if @redis.set(lock_key_for(key), lock_id, nx: true, px: lock_timeout)
       begin
         yield true
