@@ -53,6 +53,40 @@ describe RedisLockingCache do
     end
   end
 
+  describe 'attempt_lock_for' do
+    it 'yields true to a block when lock is acquired' do
+      redis_lock.attempt_lock_for('foo') do |locked|
+        locked.must_equal true
+      end
+    end
+
+    it 'yields false to a block when lock fails to acquire' do
+      redis_lock.attempt_lock_for('foo') do
+        redis_lock.attempt_lock_for('foo') do |locked|
+          locked.must_equal false
+        end
+      end
+    end
+
+    it 'removes the lock key after the block is called' do
+      redis_lock.attempt_lock_for('foo') do
+        redis_lock.get(redis_lock.lock_key_for('foo')).wont_be_nil
+      end
+      redis_lock.get(redis_lock.lock_key_for('foo')).must_be_nil
+    end
+
+    it 'removes the lock key when an error is raised in the block' do
+      proc do
+        redis_lock.attempt_lock_for('foo') do
+          redis_lock.get(redis_lock.lock_key_for('foo')).wont_be_nil
+          raise
+        end
+      end.must_raise RuntimeError
+
+      redis_lock.get(redis_lock.lock_key_for('foo')).must_be_nil
+    end
+  end
+
   describe 'fetch' do
     describe 'with missing cache key' do
       it 'returns uncached values' do
