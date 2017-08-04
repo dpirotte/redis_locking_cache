@@ -20,6 +20,25 @@ describe RedisLockingCache do
       redis.flushall
     end
 
+    describe "expiry_key_for" do
+      it "formats an expiry key for the specified key" do
+        redis.expiry_key_for("foo").must_equal "foo:expiry"
+      end
+    end
+
+    describe "get_with_external_expiry" do
+      it "returns a value and an expiry" do
+        redis.set_with_external_expiry("foo", "bar", 1000)
+        redis.get_with_external_expiry("foo").must_equal ["bar", "1"]
+      end
+
+      it "returns a value and nil if the expiry has passed" do
+        redis.set_with_external_expiry("foo", "bar", 10)
+        sleep 0.05
+        redis.get_with_external_expiry("foo").must_equal ["bar", nil]
+      end
+    end
+
     describe "with missing cache key" do
       it "returns uncached values" do
         redis.fetch("cache key") { "cached" }.must_equal "cached"

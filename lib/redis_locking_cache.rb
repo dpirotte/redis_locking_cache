@@ -5,6 +5,8 @@ require "securerandom"
 class RedisLockingCache
   extend Forwardable
 
+  ExpirySuffix = ":expiry"
+
   def initialize(redis)
     @redis = redis
   end
@@ -20,9 +22,8 @@ class RedisLockingCache
     cache_wait = opts.fetch(:cache_wait, 1)
 
     lock_key = "#{key}:lock"
-    expiry_key = "#{key}:expiry"
 
-    cached, expiry = @redis.mget(key, expiry_key)
+    cached, expiry = get_with_external_expiry(key)
 
     if cached.nil?
       cache_wait_expiry = Time.now.to_f + cache_wait
@@ -33,10 +34,9 @@ class RedisLockingCache
           if @redis.set(lock_key, lock_id, nx: true, px: lock_timeout_ms)
             begin
               cached = block.call
-              @redis.set(key, cached)
-              @redis.set(expiry_key, 1, px: expires_in_ms)
+              set_with_external_expiry(key, cached, expires_in_ms)
             ensure
-              @redis.eval('if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) end', [lock_key], [lock_id])
+              compare_and_delete(lock_key, lock_id)
             end
           else
             sleep(lock_wait)
@@ -48,16 +48,32 @@ class RedisLockingCache
       if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
         begin
           cached = block.call
-          @redis.set(key, cached)
-          @redis.set(expiry_key, 1, px: expires_in_ms)
+          set_with_external_expiry(key, cached, expires_in_ms)
         rescue
           # TODO bubble up errors when appropriate
         ensure
-          @redis.eval('if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) end', [lock_key], [lock_id])
+          compare_and_delete(lock_key, lock_id)
         end
       end
     end
 
     cached
+  end
+
+  def expiry_key_for(key)
+    "#{key}#{ExpirySuffix}"
+  end
+
+  def get_with_external_expiry(key)
+    @redis.mget(key, expiry_key_for(key))
+  end
+
+  def set_with_external_expiry(key, value, expires_in_ms)
+    @redis.set(key, value)
+    @redis.set(expiry_key_for(key), 1, px: expires_in_ms)
+  end
+
+  def compare_and_delete(key, value)
+    @redis.eval('if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) end', [key], [value])
   end
 end
