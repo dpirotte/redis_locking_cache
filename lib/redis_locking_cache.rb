@@ -1,9 +1,7 @@
-require 'forwardable'
 require 'redis'
 require 'securerandom'
 
 class RedisLockingCache
-  extend Forwardable
 
   LockSuffix = ':lock'.freeze
   ExpirySuffix = ':expiry'.freeze
@@ -11,8 +9,6 @@ class RedisLockingCache
   def initialize(redis)
     @redis = redis
   end
-
-  def_delegators :@redis, :flushall
 
   def fetch(key, opts = {})
     expires_in = opts.fetch(:expires_in, 1)
