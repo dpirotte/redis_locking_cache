@@ -1,6 +1,6 @@
-require "forwardable"
-require "redis"
-require "securerandom"
+require 'forwardable'
+require 'redis'
+require 'securerandom'
 
 class RedisLockingCache
   extend Forwardable
