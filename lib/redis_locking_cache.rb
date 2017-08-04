@@ -22,8 +22,6 @@ class RedisLockingCache
     lock_wait = opts.fetch(:lock_wait, 0.025)
     cache_wait = opts.fetch(:cache_wait, 1)
 
-    lock_key = "#{key}#{LockSuffix}"
-
     cached, expiry = get_with_external_expiry(key)
 
     # If the key is nil, then we have no choice but to recompute
