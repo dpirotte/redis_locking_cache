@@ -1,10 +1,9 @@
 require 'spec_helper'
 
-def parallel(n, &block)
-  threads = Array.new(n) do
-    Thread.new { block.call }
-  end
-  threads.each(&:join).map(&:value)
+def parallel(n)
+  Array.new(n) { Thread.new { yield } }
+    .each(&:join)
+    .map(&:value)
 end
 
 describe RedisLockingCache do

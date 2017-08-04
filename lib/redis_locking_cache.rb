@@ -14,7 +14,7 @@ class RedisLockingCache
 
   def_delegators :@redis, :flushall
 
-  def fetch(key, opts = {}, &block)
+  def fetch(key, opts = {})
     expires_in = opts.fetch(:expires_in, 1)
     expires_in_ms = (expires_in * 1000).to_i
     lock_timeout = opts.fetch(:lock_timeout, 1)
@@ -35,7 +35,7 @@ class RedisLockingCache
         unless cached = get(key)
           attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
             if locked
-              cached = block.call
+              cached = yield
               set_with_external_expiry(key, cached, expires_in_ms)
             else
               sleep(lock_wait)
@@ -57,7 +57,7 @@ class RedisLockingCache
       attempt_lock_for(key, lock_timeout: lock_timeout_ms, raise: false) do |locked|
         if locked
           begin
-            cached = block.call
+            cached = yield
             set_with_external_expiry(key, cached, expires_in_ms)
           rescue
           end
