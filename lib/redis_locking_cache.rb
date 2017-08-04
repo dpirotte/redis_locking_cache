@@ -5,6 +5,7 @@ require "securerandom"
 class RedisLockingCache
   extend Forwardable
 
+  LockSuffix = ":lock"
   ExpirySuffix = ":expiry"
 
   def initialize(redis)
@@ -21,7 +22,7 @@ class RedisLockingCache
     lock_wait = opts.fetch(:lock_wait, 0.025)
     cache_wait = opts.fetch(:cache_wait, 1)
 
-    lock_key = "#{key}:lock"
+    lock_key = "#{key}#{LockSuffix}"
 
     cached, expiry = get_with_external_expiry(key)
 
@@ -29,30 +30,22 @@ class RedisLockingCache
       cache_wait_expiry = Time.now.to_f + cache_wait
 
       while cached.nil? && Time.now.to_f < cache_wait_expiry
-        unless cached = @redis.get(key)
-          lock_id = SecureRandom.hex(16)
-          if @redis.set(lock_key, lock_id, nx: true, px: lock_timeout_ms)
-            begin
+        unless cached = get(key)
+          attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
+            if locked
               cached = block.call
               set_with_external_expiry(key, cached, expires_in_ms)
-            ensure
-              compare_and_delete(lock_key, lock_id)
+            else
+              sleep(lock_wait)
             end
-          else
-            sleep(lock_wait)
           end
         end
       end
     elsif expiry.nil?
-      lock_id = SecureRandom.hex(16)
-      if @redis.set(lock_key, 1, nx: true, ex: lock_timeout)
-        begin
+      attempt_lock_for(key, lock_timeout: lock_timeout_ms, raise: false) do |locked|
+        if locked
           cached = block.call
           set_with_external_expiry(key, cached, expires_in_ms)
-        rescue
-          # TODO bubble up errors when appropriate
-        ensure
-          compare_and_delete(lock_key, lock_id)
         end
       end
     end
@@ -60,8 +53,32 @@ class RedisLockingCache
     cached
   end
 
+  def attempt_lock_for(key, opts = {})
+    lock_id = SecureRandom.hex(16)
+    lock_key = "#{key}#{LockSuffix}"
+    should_raise = opts.fetch(:raise, true)
+
+    if @redis.set(lock_key, lock_id, nx: true, px: opts.fetch(:lock_timeout,1000))
+      begin
+        yield true
+      rescue => e
+        if should_raise
+          raise e
+        end
+      ensure
+        compare_and_delete(lock_key, lock_id)
+      end
+    else
+      yield false
+    end
+  end
+
   def expiry_key_for(key)
     "#{key}#{ExpirySuffix}"
+  end
+
+  def get(key)
+    @redis.get(key)
   end
 
   def get_with_external_expiry(key)

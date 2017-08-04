@@ -39,72 +39,74 @@ describe RedisLockingCache do
       end
     end
 
-    describe "with missing cache key" do
-      it "returns uncached values" do
-        redis.fetch("cache key") { "cached" }.must_equal "cached"
-      end
-
-      it "only permits a single concurrent call to update the cache" do
-        uncached_call_count = 0
-
-        results = parallel(10) do
-          redis.fetch("cache key") do
-            sleep 0.1 # simulating an expensive call
-            uncached_call_count += 1
-            "cached"
-          end
+    describe "fetch" do
+      describe "with missing cache key" do
+        it "returns uncached values" do
+          redis.fetch("cache key") { "cached" }.must_equal "cached"
         end
 
-        uncached_call_count.must_equal 1
-        results.must_equal ["cached"] * 10
-      end
+        it "only permits a single concurrent call to update the cache" do
+          uncached_call_count = 0
 
-      it "does not swallow errors" do
-        ->{ redis.fetch("cache key") { raise RuntimeError } }.must_raise RuntimeError
-      end
-    end
-
-    describe "with expired cache key" do
-      it "makes a single call to the origin" do
-        redis.fetch("cache key", :expires_in => 0.1) { "cached" }
-        sleep 0.2
-
-        results = parallel(5) do
-          redis.fetch("cache key") do
-            sleep 0.1
-            "new cached"
+          results = parallel(10) do
+            redis.fetch("missing cache key") do
+              sleep 0.1 # simulating an expensive call
+              uncached_call_count += 1
+              "cached"
+            end
           end
+
+          uncached_call_count.must_equal 1
+          results.must_equal ["cached"] * 10
         end
 
-        results.sort.must_equal ["cached"] * 4 + ["new cached"]
+        it "does not swallow errors" do
+          ->{ redis.fetch("cache key") { raise RuntimeError } }.must_raise RuntimeError
+        end
       end
 
-      it "swallows errors and serves the cached value" do
-        redis.fetch("cache key", :expires_in => 0.1) { "cached" }
-        sleep 0.2
+      describe "with expired cache key" do
+        it "makes a single call to the origin" do
+          redis.fetch("cache key", :expires_in => 0.1) { "cached" }
+          sleep 0.2
 
-        results = parallel(5) do
-          redis.fetch("cache key") do
-            sleep 0.1
-            raise
+          results = parallel(5) do
+            redis.fetch("cache key") do
+              sleep 0.1
+              "new cached"
+            end
           end
+
+          results.sort.must_equal ["cached"] * 4 + ["new cached"]
         end
 
-        results.sort.must_equal ["cached"] * 5
+        it "swallows errors and serves the cached value" do
+          redis.fetch("cache key", :expires_in => 0.1) { "cached" }
+          sleep 0.2
+
+          results = parallel(5) do
+            redis.fetch("cache key") do
+              sleep 0.1
+              raise
+            end
+          end
+
+          results.sort.must_equal ["cached"] * 5
+        end
       end
-    end
 
-    describe "with live cache key" do
-      it "serves the cached value" do
-        redis.fetch("cache key", :expires_in => 10) { "cached" }
+      describe "with live cache key" do
+        it "serves the cached value" do
+          redis.fetch("cache key", :expires_in => 10) { "cached" }
 
-        results = parallel(10) do
-          redis.fetch("cache key") do
-            "new cached"
+          results = parallel(10) do
+            redis.fetch("cache key") do
+              "new cached"
+            end
           end
-        end
 
-        results.must_equal ["cached"] * 10
+          results.must_equal ["cached"] * 10
+        end
       end
     end
   end
