@@ -32,14 +32,13 @@ class RedisLockingCache
       cache_wait_expiry = Time.now.to_f + cache_wait
 
       while cached.nil? && Time.now.to_f < cache_wait_expiry
-        unless cached = get(key)
-          attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
-            if locked
-              cached = yield
-              set_with_external_expiry(key, cached, expires_in_ms)
-            else
-              sleep(lock_wait)
-            end
+        next if cached = get(key)
+        attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
+          if locked
+            cached = yield
+            set_with_external_expiry(key, cached, expires_in_ms)
+          else
+            sleep(lock_wait)
           end
         end
       end
@@ -54,7 +53,7 @@ class RedisLockingCache
     # and instead we prefer to serve the stale value.
 
     elsif expiry.nil?
-      attempt_lock_for(key, lock_timeout: lock_timeout_ms, raise: false) do |locked|
+      attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
         if locked
           begin
             cached = yield
@@ -71,8 +70,9 @@ class RedisLockingCache
   def attempt_lock_for(key, opts = {})
     lock_id = SecureRandom.hex(16)
     lock_key = "#{key}#{LockSuffix}"
+    lock_timeout = opts.fetch(:lock_timeout, 1000)
 
-    if @redis.set(lock_key, lock_id, nx: true, px: opts.fetch(:lock_timeout,1000))
+    if @redis.set(lock_key, lock_id, nx: true, px: lock_timeout)
       begin
         yield true
       ensure

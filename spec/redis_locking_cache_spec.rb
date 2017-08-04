@@ -2,8 +2,8 @@ require 'spec_helper'
 
 def parallel(n)
   Array.new(n) { Thread.new { yield } }
-    .each(&:join)
-    .map(&:value)
+       .each(&:join)
+       .map(&:value)
 end
 
 describe RedisLockingCache do
@@ -27,7 +27,7 @@ describe RedisLockingCache do
     describe 'get_with_external_expiry' do
       it 'returns a value and an expiry' do
         redis.set_with_external_expiry('foo', 'bar', 1000)
-        redis.get_with_external_expiry('foo').must_equal ['bar', '1']
+        redis.get_with_external_expiry('foo').must_equal %w[bar 1]
       end
 
       it 'returns a value and nil if the expiry has passed' do
@@ -59,7 +59,9 @@ describe RedisLockingCache do
         end
 
         it 'does not swallow errors' do
-          -> { redis.fetch('cache key') { raise RuntimeError } }.must_raise RuntimeError
+          proc do
+            redis.fetch('cache key') { raise RuntimeError }
+          end.must_raise RuntimeError
         end
       end
 
