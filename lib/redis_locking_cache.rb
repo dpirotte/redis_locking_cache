@@ -5,8 +5,8 @@ require "securerandom"
 class RedisLockingCache
   extend Forwardable
 
-  LockSuffix = ":lock"
-  ExpirySuffix = ":expiry"
+  LockSuffix = ':lock'.freeze
+  ExpirySuffix = ':expiry'.freeze
 
   def initialize(redis)
     @redis = redis
