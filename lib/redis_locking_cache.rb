@@ -58,8 +58,11 @@ class RedisLockingCache
     elsif expiry.nil?
       attempt_lock_for(key, lock_timeout: lock_timeout_ms, raise: false) do |locked|
         if locked
-          cached = block.call
-          set_with_external_expiry(key, cached, expires_in_ms)
+          begin
+            cached = block.call
+            set_with_external_expiry(key, cached, expires_in_ms)
+          rescue
+          end
         end
       end
     end
@@ -70,15 +73,10 @@ class RedisLockingCache
   def attempt_lock_for(key, opts = {})
     lock_id = SecureRandom.hex(16)
     lock_key = "#{key}#{LockSuffix}"
-    should_raise = opts.fetch(:raise, true)
 
     if @redis.set(lock_key, lock_id, nx: true, px: opts.fetch(:lock_timeout,1000))
       begin
         yield true
-      rescue => e
-        if should_raise
-          raise e
-        end
       ensure
         compare_and_delete(lock_key, lock_id)
       end
