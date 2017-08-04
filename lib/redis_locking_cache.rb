@@ -103,7 +103,13 @@ class RedisLockingCache
     @redis.set(expiry_key_for(key), 1, px: expires_in_ms)
   end
 
+  LuaCompareAndDelete = <<-REDIS.gsub(/\s+/, ' ').freeze
+    if redis.call("get", KEYS[1]) == ARGV[1] then
+      return redis.call("del", KEYS[1])
+    end
+  REDIS
+
   def compare_and_delete(key, value)
-    @redis.eval('if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) end', [key], [value])
+    @redis.eval(LuaCompareAndDelete, [key], [value])
   end
 end

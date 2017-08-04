@@ -12,7 +12,8 @@ describe RedisLockingCache do
   end
 
   describe 'fetch' do
-    let(:redis) { RedisLockingCache.new(Redis.new) }
+    let(:redis) { Redis.new }
+    let(:redis_lock) { RedisLockingCache.new(redis) }
 
     before(:each) do
       redis.flushall
@@ -20,41 +21,52 @@ describe RedisLockingCache do
 
     describe 'expiry_key_for' do
       it 'formats an expiry key for the specified key' do
-        redis.expiry_key_for('foo').must_equal 'foo:expiry'
+        redis_lock.expiry_key_for('foo').must_equal 'foo:expiry'
       end
     end
 
     describe 'lock_key_for' do
       it 'formats a lock key for the specified key' do
-        redis.lock_key_for('foo').must_equal 'foo:lock'
+        redis_lock.lock_key_for('foo').must_equal 'foo:lock'
       end
     end
 
+    describe 'compare_and_delete' do
+      it 'deletes a key if its value matches' do
+        redis.set('foo', 'bar')
+        redis_lock.compare_and_delete('foo', 'bar').must_equal 1
+      end
+
+      it 'does not delete a key if its value does not match' do
+        redis.set('foo', 'bar')
+        redis_lock.compare_and_delete('foo', 'baz').must_be_nil
+      end
+    end
 
     describe 'get_with_external_expiry' do
       it 'returns a value and an expiry' do
-        redis.set_with_external_expiry('foo', 'bar', 1000)
-        redis.get_with_external_expiry('foo').must_equal %w[bar 1]
+        redis_lock.set_with_external_expiry('foo', 'bar', 1000)
+        redis_lock.get_with_external_expiry('foo').must_equal %w[bar 1]
       end
 
       it 'returns a value and nil if the expiry has passed' do
-        redis.set_with_external_expiry('foo', 'bar', 10)
+        redis_lock.set_with_external_expiry('foo', 'bar', 10)
         sleep 0.05
-        redis.get_with_external_expiry('foo').must_equal ['bar', nil]
+        redis_lock.get_with_external_expiry('foo').must_equal ['bar', nil]
       end
     end
 
     describe 'fetch' do
       describe 'with missing cache key' do
         it 'returns uncached values' do
-          redis.fetch('cache key') { 'cached' }.must_equal 'cached'
+          redis_lock.fetch('cache key') { 'cached' }.must_equal 'cached'
         end
 
         it 'only permits a single concurrent call to update the cache' do
           uncached_call_count = 0
 
           results = parallel(10) do
-            redis.fetch('missing cache key') do
+            redis_lock.fetch('missing cache key') do
               sleep 0.1 # simulating an expensive call
               uncached_call_count += 1
               'cached'
@@ -67,18 +79,18 @@ describe RedisLockingCache do
 
         it 'does not swallow errors' do
           proc do
-            redis.fetch('cache key') { raise RuntimeError }
+            redis_lock.fetch('cache key') { raise RuntimeError }
           end.must_raise RuntimeError
         end
       end
 
       describe 'with expired cache key' do
         it 'makes a single call to the origin' do
-          redis.fetch('cache key', expires_in: 0.1) { 'cached' }
+          redis_lock.fetch('cache key', expires_in: 0.1) { 'cached' }
           sleep 0.2
 
           results = parallel(5) do
-            redis.fetch('cache key') do
+            redis_lock.fetch('cache key') do
               sleep 0.1
               'new cached'
             end
@@ -88,11 +100,11 @@ describe RedisLockingCache do
         end
 
         it 'swallows errors and serves the cached value' do
-          redis.fetch('cache key', expires_in: 0.1) { 'cached' }
+          redis_lock.fetch('cache key', expires_in: 0.1) { 'cached' }
           sleep 0.2
 
           results = parallel(5) do
-            redis.fetch('cache key') do
+            redis_lock.fetch('cache key') do
               sleep 0.1
               raise
             end
@@ -104,10 +116,10 @@ describe RedisLockingCache do
 
       describe 'with live cache key' do
         it 'serves the cached value' do
-          redis.fetch('cache key', expires_in: 10) { 'cached' }
+          redis_lock.fetch('cache key', expires_in: 10) { 'cached' }
 
           results = parallel(10) do
-            redis.fetch('cache key') do
+            redis_lock.fetch('cache key') do
               'new cached'
             end
           end
