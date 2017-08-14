@@ -83,7 +83,7 @@ class RedisLockingCache
   end
 
   def get_with_external_expiry(key)
-    @redis.mget(key, expiry_key_for(key))
+    [key, expiry_key_for(key)].map { |k| get(k) }
   end
 
   def set_with_external_expiry(key, value, expires_in_ms)
