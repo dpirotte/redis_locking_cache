@@ -11,11 +11,31 @@ This gem is inspired by some helpful behavior in Nginx's HTTP proxy module: [pro
 
 ## Installation
 
-Coming soon...
+Add this line to your application's Gemfile:
+
+```ruby
+gem 'redis_locking_cache'
+```
+
+And then execute:
+
+    $ bundle
+
+Or install it yourself as:
+
+    $ gem install redis_locking_cache
 
 ## Usage
 
-Coming soon...
+```ruby
+require 'redis_locking_cache'
+
+cache = RedisLockingCache.new(Redis.new)
+
+expensive_value = cache.fetch('expensive_key', expires_in: 300) do
+  compute_expensive_value
+end
+```
 
 ## Development
 
