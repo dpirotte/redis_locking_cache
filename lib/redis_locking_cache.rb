@@ -2,7 +2,6 @@ require 'redis'
 require 'securerandom'
 
 class RedisLockingCache
-
   LockSuffix = ':lock'.freeze
   ExpirySuffix = ':expiry'.freeze
 
@@ -16,35 +15,35 @@ class RedisLockingCache
 
     cached, expiry = get_with_external_expiry(key)
 
-    # If the key is nil, then we have no choice but to recompute
-    # the value. To do so as politely as possible, only permit a single
-    # concurrent caller to execute the block, and all other callers
-    # must loop/sleep.
     if cached.nil?
+      # If the key is nil, then we have no choice but to recompute
+      # the value. To do so as politely as possible, only permit a single
+      # concurrent caller to execute the block, and all other callers
+      # must loop/sleep.
       cache_wait_expiry = Time.now.to_f + cache_wait
 
       while cached.nil? && Time.now.to_f < cache_wait_expiry
-        next if cached = get(key)
         attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
           if locked
             cached = yield
             set_with_external_expiry(key, cached, expires_in_ms)
           else
             sleep(lock_wait)
+            cached = get(key)
           end
         end
       end
 
-    # If the key is present, but the expiry key is not, then we have a
-    # stale value to serve. In this case, assume that it is better to
-    # serve the stale value as quickly as possible rather than wait for
-    # a caller to update the value. The first caller to pass through
-    # will acquire the lock and update the value, and future callers
-    # will simply serve the stale value.
-    # In this case, also, we do not want to return an error to the caller,
-    # and instead we prefer to serve the stale value.
-
     elsif expiry.nil?
+      # If the key is present, but the expiry key is not, then we have a
+      # stale value to serve. In this case, assume that it is better to
+      # serve the stale value as quickly as possible rather than wait for
+      # a caller to update the value. The first caller to pass through
+      # will acquire the lock and update the value, and future callers
+      # will simply serve the stale value.
+      # In this case, also, we do not want to return an error to the caller,
+      # and instead we prefer to serve the stale value.
+
       attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
         if locked
           begin
