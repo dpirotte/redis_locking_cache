@@ -9,8 +9,9 @@ class RedisLockingCache
     @redis = redis
   end
 
-  def fetch(key, expires_in: 1, lock_timeout: 1, lock_wait: 0.025, cache_wait: 1)
+  def fetch(key, expires_in: 1, ttl: 2, lock_timeout: 1, lock_wait: 0.025, cache_wait: 1)
     expires_in_ms = (expires_in * 1000).to_i
+    ttl_in_ms = (ttl * 1000).to_i
     lock_timeout_ms = (lock_timeout * 1000).to_i
 
     cached, expiry = get_with_external_expiry(key)
@@ -26,7 +27,7 @@ class RedisLockingCache
         attempt_lock_for(key, lock_timeout: lock_timeout_ms) do |locked|
           if locked
             cached = yield
-            set_with_external_expiry(key, cached, expires_in_ms)
+            set_with_external_expiry(key, cached, expires_in_ms, ttl_in_ms)
           else
             sleep(lock_wait)
             cached = get(key)
@@ -48,7 +49,7 @@ class RedisLockingCache
         if locked
           begin
             cached = yield
-            set_with_external_expiry(key, cached, expires_in_ms)
+            set_with_external_expiry(key, cached, expires_in_ms, ttl_in_ms)
           rescue
           end
         end
@@ -86,8 +87,8 @@ class RedisLockingCache
     [key, expiry_key_for(key)].map { |k| get(k) }
   end
 
-  def set_with_external_expiry(key, value, expires_in_ms)
-    @redis.set(key, value)
+  def set_with_external_expiry(key, value, expires_in_ms, ttl_in_ms)
+    @redis.set(key, value, px: ttl_in_ms)
     @redis.set(expiry_key_for(key), 1, px: expires_in_ms)
   end
 

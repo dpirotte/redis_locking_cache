@@ -42,14 +42,20 @@ describe RedisLockingCache do
 
   describe 'get_with_external_expiry' do
     it 'returns a value and an expiry' do
-      redis_lock.set_with_external_expiry('foo', 'bar', 1000)
+      redis_lock.set_with_external_expiry('foo', 'bar', 1000, 2000)
       expect(redis_lock.get_with_external_expiry('foo')).to eq %w[bar 1]
     end
 
     it 'returns a value and nil if the expiry has passed' do
-      redis_lock.set_with_external_expiry('foo', 'bar', 10)
+      redis_lock.set_with_external_expiry('foo', 'bar', 5, 100)
       sleep 0.05
       expect(redis_lock.get_with_external_expiry('foo')).to eq ['bar', nil]
+    end
+
+    it 'returns nil and nil if the expiry and ttl has passed' do
+      redis_lock.set_with_external_expiry('foo', 'bar', 5, 10)
+      sleep 0.05
+      expect(redis_lock.get_with_external_expiry('foo')).to eq [nil, nil]
     end
   end
 
@@ -117,7 +123,7 @@ describe RedisLockingCache do
 
     describe 'with expired cache key' do
       it 'makes a single call to the origin' do
-        redis_lock.fetch('cache key', expires_in: 0.1) { 'cached' }
+        redis_lock.fetch('cache key', expires_in: 0.1, ttl: 1) { 'cached' }
         sleep 0.2
 
         results = parallel(5) do
@@ -131,7 +137,7 @@ describe RedisLockingCache do
       end
 
       it 'swallows errors and serves the cached value' do
-        redis_lock.fetch('cache key', expires_in: 0.1) { 'cached' }
+        redis_lock.fetch('cache key', expires_in: 0.1, ttl: 1) { 'cached' }
         sleep 0.2
 
         results = parallel(5) do
