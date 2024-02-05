@@ -1,8 +1,5 @@
 # RedisLockingCache
 
-[![Build Status](https://travis-ci.org/dpirotte/redis_locking_cache.svg?branch=master)](https://travis-ci.org/dpirotte/redis_locking_cache)
-[![Coverage Status](https://coveralls.io/repos/github/dpirotte/redis_locking_cache/badge.svg?branch=master)](https://coveralls.io/github/dpirotte/redis_locking_cache?branch=master)
-
 Warning: This gem is alpha quality and not intended for production use. Code of this nature is fraught with race conditions and edge cases, and this gem was quickly constructed as an example.
 
 WIP Redis caching gem that attempts to mitigate [cache stampede](https://en.wikipedia.org/wiki/Cache_stampede) by only permitting a single concurrent cache request to refresh the cache at a time. While the cache is refreshing, the stale value will be served. If cache refresh raises an error, the stale value will be served.
